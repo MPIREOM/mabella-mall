@@ -113,29 +113,57 @@
   }
   .mm-plan-img { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; pointer-events: none; }
   .mm-shop-rect {
-    position: absolute; border: 1.5px solid transparent;
-    background: rgba(34, 197, 94, 0.08);
-    cursor: pointer; transition: all 120ms ease;
+    position: absolute;
+    border: 2px solid rgba(22, 163, 74, 0.85);
+    background: rgba(34, 197, 94, 0.28);
+    cursor: pointer; transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
     display: flex; align-items: center; justify-content: center;
     font-size: 0.6vw; font-weight: 700; color: transparent;
     overflow: hidden; font-family: inherit;
   }
   .mm-shop-rect:hover {
-    background: rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.35);
     border-color: #000; color: #000; z-index: 5;
     box-shadow: 0 0 0 2px rgba(0,0,0,0.06);
   }
-  .mm-shop-rect.occupied { background: rgba(239, 68, 68, 0.12); }
-  .mm-shop-rect.occupied:hover { background: rgba(239, 68, 68, 0.35); border-color: #b91c1c; }
+  .mm-shop-rect.occupied {
+    border-color: rgba(185, 28, 28, 0.9);
+    background: rgba(239, 68, 68, 0.35);
+  }
+  .mm-shop-rect.occupied:hover { background: rgba(239, 68, 68, 0.5); border-color: #991b1b; }
+  .mm-shop-rect.reserved {
+    border-color: rgba(217, 119, 6, 0.9);
+    background: rgba(245, 158, 11, 0.32);
+  }
+  .mm-shop-rect.reserved:hover { background: rgba(245, 158, 11, 0.5); border-color: #b45309; }
   .mm-shop-rect.selected {
-    background: rgba(0, 0, 0, 0.4) !important;
+    background: rgba(0, 0, 0, 0.45) !important;
     border: 2px solid #000 !important;
     color: #fff !important; z-index: 10;
+  }
+  @media (max-width: 900px) {
+    .mm-shop-rect { font-size: 11px; }
   }
 
   .mm-detail {
     grid-area: detail; border-left: 1px solid var(--border);
     padding: 24px; background: var(--bg-elev); overflow-y: auto;
+    position: relative;
+  }
+  .mm-detail-close {
+    position: absolute; top: 14px; right: 14px;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border-strong);
+    font-size: 20px; line-height: 1; font-family: inherit;
+    cursor: pointer; display: none;
+    align-items: center; justify-content: center;
+    padding: 0; z-index: 101;
+  }
+  .mm-detail-close:hover { background: var(--border); }
+  @media (max-width: 900px) {
+    .mm-detail-close { display: flex; }
+    .mm-detail { padding-top: 60px; }
   }
   .mm-detail-empty {
     color: var(--text-faint); font-size: 13px;
@@ -731,6 +759,7 @@
       <div style="font-size:13px;color:var(--text-dim);line-height:1.5;margin-bottom:20px;padding:14px;background:var(--surface);border-radius:var(--radius-sm);border:1px solid var(--border)">${shop.notes}</div>
     ` : '';
     el.innerHTML = `
+      <button class="mm-detail-close" id="detailCloseBtn" aria-label="Close details">×</button>
       <div class="mm-detail-head">
         <div>
           <div class="mm-detail-num">${shop.shop_number}</div>
@@ -761,6 +790,11 @@
       ${notes}
       ${inquiry}
     `;
+
+    document.getElementById('detailCloseBtn').onclick = () => {
+      selectedId = null;
+      renderAll();
+    };
   }
 
   function renderAll() {
