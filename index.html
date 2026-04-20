@@ -189,6 +189,65 @@
     display: flex; align-items: center; justify-content: center;
     height: 100%; color: var(--text-dim); font-size: 13px;
   }
+
+  /* ---- Edit mode (?edit=1) ---- */
+  .mm-shop-rect.edit-mode {
+    border: 2px dashed #ff6b00 !important;
+    background: rgba(255, 107, 0, 0.18) !important;
+    color: #000 !important;
+    cursor: move; touch-action: none;
+  }
+  .mm-shop-rect.edit-mode:hover { background: rgba(255, 107, 0, 0.32) !important; }
+  .mm-shop-rect.edit-mode.edit-active {
+    border-color: #00d4ff !important;
+    background: rgba(0, 212, 255, 0.25) !important;
+    z-index: 15;
+  }
+  .mm-resize-handle {
+    position: absolute; width: 14px; height: 14px;
+    background: #ff6b00; border: 2px solid #fff; border-radius: 50%;
+    z-index: 20; box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
+  }
+  .mm-resize-handle.nw { left: -8px; top: -8px; cursor: nwse-resize; }
+  .mm-resize-handle.ne { right: -8px; top: -8px; cursor: nesw-resize; }
+  .mm-resize-handle.sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
+  .mm-resize-handle.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
+  .mm-edit-banner {
+    position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+    background: #ff6b00; color: #000; padding: 6px 14px;
+    border-radius: 999px; font-size: 12px; font-weight: 700;
+    z-index: 1001; letter-spacing: 0.04em; text-transform: uppercase;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .mm-edit-panel {
+    position: fixed; bottom: 16px; right: 16px;
+    width: 420px; max-height: 65vh; overflow: hidden;
+    background: rgba(15, 15, 17, 0.96); color: #f2f2f3;
+    border: 1px solid #3a3a3f; border-radius: 10px;
+    padding: 14px; font-size: 12px; z-index: 1000;
+    backdrop-filter: blur(10px); display: flex; flex-direction: column;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  }
+  .mm-edit-panel-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; gap: 8px;
+  }
+  .mm-edit-panel-title { font-weight: 600; font-size: 13px; }
+  .mm-edit-panel-actions { display: flex; gap: 6px; }
+  .mm-edit-btn {
+    background: #f2f2f3; color: #0a0a0b; border: 0;
+    padding: 5px 10px; border-radius: 4px; cursor: pointer;
+    font-size: 11px; font-weight: 600; font-family: inherit;
+  }
+  .mm-edit-btn.ghost { background: transparent; color: #f2f2f3; border: 1px solid #3a3a3f; }
+  .mm-edit-btn:hover { opacity: 0.85; }
+  .mm-edit-sql {
+    background: #000; padding: 10px; border-radius: 6px;
+    overflow: auto; max-height: 45vh; font-size: 11px;
+    line-height: 1.5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre; margin: 0; color: #d4d4d4;
+  }
+  .mm-edit-hint { color: #9c9ca3; font-size: 11px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -306,12 +365,28 @@
     }).format(n);
   }
 
+  // Inverse of mbToPixel + shopRect — converts an image-pixel rectangle
+  // back to the shop's stored (label_cx, label_cy, width_cm, height_cm).
+  function rectToShop(leftPx, topPx, widthPx, heightPx) {
+    const cx_px = leftPx + widthPx / 2;
+    const cy_py = topPx + heightPx / 2;
+    return {
+      label_cy: cx_px * MB_H / IMG_W,
+      label_cx: MB_W - (cy_py * MB_W / IMG_H),
+      width_cm:  widthPx  / (PTS_PER_CM_X * (IMG_W / MB_H)),
+      height_cm: heightPx / (PTS_PER_CM_Y * (IMG_H / MB_W)),
+    };
+  }
+
   // -------------------------------------------------------------------
   //  State
   // -------------------------------------------------------------------
   let allShops = [];
   let currentFloor = 'first';
   let selectedId = null;
+  const EDIT_MODE = new URLSearchParams(location.search).get('edit') === '1';
+  const dirtyShops = new Map(); // id -> latest {label_cx, label_cy, width_cm, height_cm}
+  let editActiveId = null;
 
   // -------------------------------------------------------------------
   //  Rendering
@@ -370,6 +445,8 @@
       if (shop.status === 'occupied') cls += ' occupied';
       if (shop.status === 'reserved') cls += ' reserved';
       if (selectedId === shop.id) cls += ' selected';
+      if (EDIT_MODE) cls += ' edit-mode';
+      if (EDIT_MODE && editActiveId === shop.id) cls += ' edit-active';
       btn.className = cls;
       btn.style.left = (r.left * 100) + '%';
       btn.style.top = (r.top * 100) + '%';
@@ -377,11 +454,163 @@
       btn.style.height = (r.height * 100) + '%';
       btn.title = `${shop.shop_number} · ${shop.area_sqm ?? '—'} m²`;
       btn.textContent = shop.shop_number;
-      btn.onclick = () => { selectedId = shop.id; renderAll(); };
+      if (EDIT_MODE) {
+        attachEditHandlers(btn, shop, aspect);
+      } else {
+        btn.onclick = () => { selectedId = shop.id; renderAll(); };
+      }
       aspect.appendChild(btn);
     });
 
     frame.appendChild(aspect);
+
+    if (EDIT_MODE) renderEditPanel();
+  }
+
+  // -------------------------------------------------------------------
+  //  Edit mode — drag to move, corner handles to resize
+  // -------------------------------------------------------------------
+  function attachEditHandlers(btn, shop, aspect) {
+    ['nw', 'ne', 'sw', 'se'].forEach(corner => {
+      const h = document.createElement('div');
+      h.className = 'mm-resize-handle ' + corner;
+      h.addEventListener('pointerdown', e => startDrag(e, corner));
+      btn.appendChild(h);
+    });
+
+    btn.addEventListener('pointerdown', e => {
+      if (e.target !== btn) return; // ignore handle clicks
+      startDrag(e, 'move');
+    });
+
+    let mode = null, didDrag = false, start = null;
+
+    function startDrag(e, m) {
+      e.preventDefault();
+      e.stopPropagation();
+      mode = m; didDrag = false;
+      const rect = aspect.getBoundingClientRect();
+      start = {
+        mx: e.clientX, my: e.clientY,
+        aw: rect.width, ah: rect.height,
+        left: parseFloat(btn.style.left),
+        top: parseFloat(btn.style.top),
+        width: parseFloat(btn.style.width),
+        height: parseFloat(btn.style.height),
+      };
+      editActiveId = shop.id;
+      document.querySelectorAll('.mm-shop-rect.edit-active')
+        .forEach(el => el.classList.remove('edit-active'));
+      btn.classList.add('edit-active');
+      document.addEventListener('pointermove', onDrag);
+      document.addEventListener('pointerup', endDrag, { once: true });
+    }
+
+    function onDrag(e) {
+      if (!mode) return;
+      const dx = (e.clientX - start.mx) / start.aw * 100;
+      const dy = (e.clientY - start.my) / start.ah * 100;
+      if (Math.abs(dx) + Math.abs(dy) > 0.05) didDrag = true;
+      let { left, top, width, height } = start;
+      if (mode === 'move') {
+        left += dx; top += dy;
+      } else {
+        if (mode.includes('w')) { left += dx; width -= dx; }
+        if (mode.includes('e')) { width += dx; }
+        if (mode.includes('n')) { top += dy; height -= dy; }
+        if (mode.includes('s')) { height += dy; }
+      }
+      width = Math.max(0.3, width);
+      height = Math.max(0.3, height);
+      btn.style.left = left + '%';
+      btn.style.top = top + '%';
+      btn.style.width = width + '%';
+      btn.style.height = height + '%';
+    }
+
+    function endDrag() {
+      document.removeEventListener('pointermove', onDrag);
+      if (mode && didDrag) {
+        const leftPx   = parseFloat(btn.style.left)   / 100 * IMG_W;
+        const topPx    = parseFloat(btn.style.top)    / 100 * IMG_H;
+        const widthPx  = parseFloat(btn.style.width)  / 100 * IMG_W;
+        const heightPx = parseFloat(btn.style.height) / 100 * IMG_H;
+        const updated = rectToShop(leftPx, topPx, widthPx, heightPx);
+        Object.assign(shop, updated);
+        dirtyShops.set(shop.id, {
+          id: shop.id,
+          shop_number: shop.shop_number,
+          floor: shop.floor,
+          ...updated,
+        });
+        renderEditPanel();
+      }
+      mode = null; start = null;
+    }
+  }
+
+  function renderEditPanel() {
+    if (!document.querySelector('.mm-edit-banner')) {
+      const banner = document.createElement('div');
+      banner.className = 'mm-edit-banner';
+      banner.textContent = 'Edit mode — drag to move, corners to resize';
+      document.body.appendChild(banner);
+    }
+
+    let panel = document.getElementById('editPanel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'editPanel';
+      panel.className = 'mm-edit-panel';
+      document.body.appendChild(panel);
+    }
+
+    if (dirtyShops.size === 0) {
+      panel.innerHTML = `
+        <div class="mm-edit-panel-head">
+          <div class="mm-edit-panel-title">Calibration</div>
+        </div>
+        <div class="mm-edit-hint">
+          Drag any shop to reposition it, or grab a corner handle to resize.
+          Once boxes match the drawing, copy the generated SQL and run it in
+          Supabase to persist the changes.
+        </div>
+      `;
+      return;
+    }
+
+    const sql = Array.from(dirtyShops.values()).map(s => {
+      const cx = s.label_cx.toFixed(2);
+      const cy = s.label_cy.toFixed(2);
+      const w  = Math.round(s.width_cm);
+      const h  = Math.round(s.height_cm);
+      return `UPDATE shops SET label_cx=${cx}, label_cy=${cy}, width_cm=${w}, height_cm=${h} WHERE id='${s.id}'; -- ${s.shop_number}`;
+    }).join('\n');
+
+    panel.innerHTML = `
+      <div class="mm-edit-panel-head">
+        <div class="mm-edit-panel-title">${dirtyShops.size} shop${dirtyShops.size === 1 ? '' : 's'} modified</div>
+        <div class="mm-edit-panel-actions">
+          <button class="mm-edit-btn ghost" id="resetEditBtn">Reset</button>
+          <button class="mm-edit-btn" id="copySqlBtn">Copy SQL</button>
+        </div>
+      </div>
+      <pre class="mm-edit-sql">${sql}</pre>
+    `;
+
+    document.getElementById('copySqlBtn').onclick = async () => {
+      try { await navigator.clipboard.writeText(sql); }
+      catch (_) { /* ignore */ }
+      const b = document.getElementById('copySqlBtn');
+      const t = b.textContent; b.textContent = 'Copied!';
+      setTimeout(() => { b.textContent = t; }, 1200);
+    };
+    document.getElementById('resetEditBtn').onclick = () => {
+      if (!confirm('Discard all unsaved calibration changes and reload original data?')) return;
+      dirtyShops.clear();
+      editActiveId = null;
+      loadShops();
+    };
   }
 
   function renderDetail() {
@@ -473,7 +702,7 @@
       allShops = await res.json();
       console.log('Loaded', allShops.length, 'shops');
       renderAll();
-      pollForChanges();
+      if (!EDIT_MODE) pollForChanges();
     } catch (e) {
       console.error('Error loading shops:', e);
       document.getElementById('planFrame').innerHTML =
