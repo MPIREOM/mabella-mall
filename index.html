@@ -38,15 +38,20 @@
     height: 100vh;
   }
   @media (max-width: 900px) {
+    html, body { height: auto; overflow: auto; -webkit-overflow-scrolling: touch; }
     .mm-root {
       grid-template-columns: 1fr;
-      grid-template-rows: 60px auto 1fr;
+      grid-template-rows: 60px auto auto;
       grid-template-areas: 'header' 'sidebar' 'plan';
       height: auto; min-height: 100vh;
     }
     .mm-sidebar { padding: 10px 20px; }
     .mm-sidebar-summary,
     .mm-sidebar-zones { display: none; }
+    .mm-plan { padding: 10px; height: auto; overflow: visible; }
+    .mm-plan-frame { height: auto; }
+    .mm-plan-aspect { max-height: none; }
+    .mm-shop-rect { touch-action: manipulation; }
     .mm-detail {
       position: fixed; inset: 0; z-index: 100;
       transform: translateY(100%);
