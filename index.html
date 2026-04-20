@@ -44,6 +44,9 @@
       grid-template-areas: 'header' 'sidebar' 'plan';
       height: auto; min-height: 100vh;
     }
+    .mm-sidebar { padding: 10px 20px; }
+    .mm-sidebar-summary,
+    .mm-sidebar-zones { display: none; }
     .mm-detail {
       position: fixed; inset: 0; z-index: 100;
       transform: translateY(100%);
@@ -300,9 +303,11 @@
   </header>
 
   <aside class="mm-sidebar">
-    <h3 class="mm-section-title">Floor Summary</h3>
-    <div id="stats"></div>
-    <div class="mm-legend">
+    <div class="mm-sidebar-summary">
+      <h3 class="mm-section-title">Floor Summary</h3>
+      <div id="stats"></div>
+    </div>
+    <div class="mm-legend mm-sidebar-zones">
       <h3 class="mm-section-title">Zones</h3>
       <div id="legend"></div>
     </div>
