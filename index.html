@@ -369,8 +369,10 @@
   // -------------------------------------------------------------------
   const MB_W = 612, MB_H = 792;
   const IMG_W = 3300, IMG_H = 2550;
-  const PTS_PER_CM_X = 0.061;
-  const PTS_PER_CM_Y = 0.057;
+  // Drawing is at 1:500 architectural scale, so 1 cm real ≈ 0.0567 pts.
+  // Keep X and Y identical so boxes render with the correct aspect ratio.
+  const PTS_PER_CM_X = 0.0567;
+  const PTS_PER_CM_Y = 0.0567;
 
   const FLOOR_META = {
     ground: 'Ground Floor',
