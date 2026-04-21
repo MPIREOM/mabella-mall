@@ -783,11 +783,12 @@
     const rentPerSqm = shop.rent_per_sqm
       ? `<div class="mm-detail-cell-sub">${formatOMR(shop.rent_per_sqm)} / m²</div>`
       : '';
+    const inquiryArea = shop.area_sqm != null ? `${shop.area_sqm} sqm` : '';
+    const inquiryMsg  = `Hi, I'm interested in shop ${shop.shop_number} (${FLOOR_META[shop.floor]}${inquiryArea ? ', ' + inquiryArea : ''}) at Mabella Mall.`;
+    const inquiryUrl  = `https://api.whatsapp.com/send?phone=${WHATSAPP_PHONE}&text=${encodeURIComponent(inquiryMsg)}`;
     const inquiry = shop.status === 'available' ? `
       <a class="mm-detail-inquiry"
-         href="https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
-           `Hi, I'm interested in shop ${shop.shop_number} (${FLOOR_META[shop.floor]}, ${shop.area_sqm ?? '—'} m²) at Mabella Mall.`
-         )}"
+         href="${inquiryUrl}"
          target="_blank" rel="noopener noreferrer">
         Inquire via WhatsApp
       </a>` : '';
