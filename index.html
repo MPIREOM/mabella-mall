@@ -419,6 +419,15 @@
     };
   }
 
+  function resetMobileZoom() {
+    const meta = document.querySelector('meta[name=viewport]');
+    if (!meta) return;
+    const original = meta.getAttribute('content');
+    meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    window.scrollTo(0, 0);
+    setTimeout(() => meta.setAttribute('content', original), 350);
+  }
+
   function formatOMR(n) {
     if (n == null) return '—';
     return new Intl.NumberFormat('en-OM', {
@@ -761,7 +770,13 @@
       `;
       return;
     }
+    const wasOpen = el.classList.contains('open');
     el.classList.add('open');
+    if (!wasOpen && window.innerWidth <= 900) {
+      // Force mobile browsers back to scale 1 so the fixed-position detail
+      // panel isn't partly clipped by a pinch-zoomed visual viewport.
+      resetMobileZoom();
+    }
     const dims = (shop.width_cm && shop.height_cm)
       ? `${(shop.width_cm/100).toFixed(2)} × ${(shop.height_cm/100).toFixed(2)} m`
       : '';
